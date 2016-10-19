@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SimpleJPEGExporter
  *
  * A Photoshop script that exports one or more images as JPEG files
@@ -14,20 +14,20 @@
 // in Photoshop...
 //#target photoshop
 
-var DEFAULT_JPEG_QUALITY = 75;
-var MIN_JPEG_QUALITY = 10;
-var DEFAULT_MAX_IMAGE_SIZE = 1920;
-var MAX_UI_PATH_LEN = 60;
-var KEY_EXPORT_FOLDER = app.stringIDToTypeID('exportFolder');
-var KEY_JPEG_QUALITY = app.stringIDToTypeID('jpegQuality');
-var KEY_MAX_IMAGE_SIZE = app.stringIDToTypeID('maxImageSize');
-var KEY_CLOSE_AFTER_EXPORT = app.stringIDToTypeID('closeAfterExport');
-var KEY_SILENT_OVERWRITE = app.stringIDToTypeID('silentOverwrite');
-var SETTINGS_KEY = 'utlcoSimpleJPEGExporter';
+const var DEFAULT_JPEG_QUALITY = 75;
+const var MIN_JPEG_QUALITY = 10;
+const var DEFAULT_MAX_IMAGE_SIZE = 1920;
+const var MAX_UI_PATH_LEN = 60;
+const var KEY_EXPORT_FOLDER = app.stringIDToTypeID('exportFolder');
+const var KEY_JPEG_QUALITY = app.stringIDToTypeID('jpegQuality');
+const var KEY_MAX_IMAGE_SIZE = app.stringIDToTypeID('maxImageSize');
+const var KEY_CLOSE_AFTER_EXPORT = app.stringIDToTypeID('closeAfterExport');
+const var KEY_SILENT_OVERWRITE = app.stringIDToTypeID('silentOverwrite');
+const var SETTINGS_KEY = 'utlcoSimpleJPEGExporter';
 
-var EXPORT_RETRY = -1;
-var EXPORT_FAILED = -2;
-var EXPORT_OK = 1;
+const var EXPORT_RETRY = -1;
+const var EXPORT_FAILED = -2;
+const var EXPORT_OK = 1;
 
 /**
  * @constructor Constructor.
@@ -64,18 +64,14 @@ SimpleJPEGExporter.prototype.getOptions = function() {
   try {
     var desc = app.getCustomOptions(SETTINGS_KEY);
     this.exportFolder = Folder(desc.getString(KEY_EXPORT_FOLDER));
-    if (desc.hasKey(KEY_JPEG_QUALITY)) {
+    if (desc.hasKey(KEY_JPEG_QUALITY))
       this.jpegQuality = desc.getInteger(KEY_JPEG_QUALITY);
-    }
-    if (desc.hasKey(KEY_MAX_IMAGE_SIZE)) {
+    if (desc.hasKey(KEY_MAX_IMAGE_SIZE))
       this.maxImageSize = desc.getInteger(KEY_MAX_IMAGE_SIZE);
-    }
-    if (desc.hasKey(KEY_CLOSE_AFTER_EXPORT)) {
+    if (desc.hasKey(KEY_CLOSE_AFTER_EXPORT))
       this.closeAfterExport = desc.getBoolean(KEY_CLOSE_AFTER_EXPORT);
-    }
-    if (desc.hasKey(KEY_SILENT_OVERWRITE)) {
+    if (desc.hasKey(KEY_SILENT_OVERWRITE))
       this.silentOverwrite = desc.getBoolean(KEY_SILENT_OVERWRITE);
-    }
   } catch (e) {
     // ignore - will use defaults...
     this.exportFolder = app.activeDocument.path;
@@ -105,7 +101,7 @@ SimpleJPEGExporter.prototype.resetOptions = function() {
     this.setDefaultOptions();
     app.eraseCustomOptions(SETTINGS_KEY);
   } catch (e) {
-    // ignore...
+    ;// ignore...
   }
 };
 
@@ -143,17 +139,18 @@ SimpleJPEGExporter.prototype.doit = function() {
  */
 SimpleJPEGExporter.prototype.exportAll = function() {
   var status = EXPORT_OK;
-  var jpegQuality = Math.round(12 * (this.jpegQuality / 100.0));
-  var numDocs = app.documents.length;
 
   app.displayDialogs = DialogModes.NO;
   preferences.rulerUnits = Units.PIXELS;
 
+  var jpegQuality = Math.round(12 * (this.jpegQuality / 100.0));
+  var numDocs = app.documents.length;
   for (var i = 0; i < numDocs; i++) {
     var srcDoc = app.documents[i];
+    app.activeDocument = srcDoc;
+
     var destPath = this.exportFolder.fullName + '/' + srcDoc.name;
     var jpegFile = File(destPath);
-
     if (jpegFile.fsName == srcDoc.fullName.fsName) {
       Window.alert('Cannot overwrite the original image file: ' +
                    srcDoc.name + '\n' +
@@ -161,7 +158,6 @@ SimpleJPEGExporter.prototype.exportAll = function() {
       status = EXPORT_RETRY;
       break;
     }
-    app.activeDocument = srcDoc;
 
     // Make a temporary copy of the current active document.
     var tmpDoc = srcDoc.duplicate('untitled', true);
