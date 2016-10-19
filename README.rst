@@ -9,12 +9,16 @@ versions earlier than Photoshop CS5 but it should be compatible.
 It is intended to be used by artists to create JPEGs that are compatible with
 various online application platforms such as
 `callforentry.org <http://callforentry.org>`_.
+It can save a lot of time if you need to resize and export several images.
 
 Most of these application platforms require images to be 1920 pixels on the
-longest side and output as JPEG files. This script will automatically resize
-the image so that the longest side (either width or height)
-is equal to the specified maximum size.
+longest side and output as JPEG files. This script will automatically scale
+the image down (or up) so that the longest side (either width or height)
+is equal to the specified nominal size.
 Also, the color profile will be converted to sRGB.
+
+It works like a batch export in that all currently opened images
+will be exported.
 
 Installation
 ------------
@@ -55,9 +59,10 @@ Usage
 
 1. Open any images you want to export.
 
-2. Select File->Scripts->SimpleJPegExport to export all the images
-   currently open in Photoshop. The script will not modify the
-   original images.
+2. Select File->Scripts->SimpleJPegExport
+
+The script will export all the images currently open in Photoshop.
+The original images will not be modified.
 
 From the script dialog you can choose the destination folder
 for exported JPEGs. The default settings should be fine for
