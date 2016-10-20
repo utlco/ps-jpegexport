@@ -10,8 +10,19 @@
  *
  */
 
-// This is unnecessary since it needs to be invoked with images already opened
-// in Photoshop...
+/*
+@@@BUILDINFO@@@ SimpleJPEGExporter.jsx 0.1
+*/
+/*
+// BEGIN__HARVEST_EXCEPTION_ZSTRING
+<javascriptresource>
+<name>$$$/UTLCO/Menu=Simple JPEG Export...</name>
+<eventid>46a4a150-963b-11e6-bdf4-0800200c9a66</eventid>
+</javascriptresource>
+// END__HARVEST_EXCEPTION_ZSTRING
+*/
+
+// This is probably unnecessary...
 //#target photoshop
 
 var DEFAULT_JPEG_QUALITY = 75;
@@ -34,16 +45,7 @@ var EXPORT_OK = 1;
  */
 function SimpleJPEGExporter() {
   this.windowRef = null;
-  // Initialize settings/options with default values.
-  this.setDefaultOptions();
-  // Get stored options - these override defaults if present.
-  this.getOptions();
-}
 
-/**
- *  Set options to default values.
- */
-SimpleJPEGExporter.prototype.setDefaultOptions = function() {
   // JPEG output quality 1-100%
   this.jpegQuality = DEFAULT_JPEG_QUALITY;
   // Maximum exported image height/width
@@ -55,15 +57,15 @@ SimpleJPEGExporter.prototype.setDefaultOptions = function() {
   this.silentOverwrite = true;
   // Close the temporary copy after export (can be set to false for debugging)
   this.closeTmpAfterExport = true;
-};
+  // The folder where the exported JPEGs will be saved
+  this.exportFolder = app.activeDocument.path;
 
-/**
- *  Fetch this dialog's previous option values.
- */
-SimpleJPEGExporter.prototype.getOptions = function() {
+  // Get stored options - these override defaults if present.
   try {
     var desc = app.getCustomOptions(SETTINGS_KEY);
-    this.exportFolder = Folder(desc.getString(KEY_EXPORT_FOLDER));
+    if (desc.hasKey(KEY_EXPORT_FOLDER)) {
+      this.exportFolder = Folder(desc.getString(KEY_EXPORT_FOLDER));
+    }
     if (desc.hasKey(KEY_JPEG_QUALITY)) {
       this.jpegQuality = desc.getInteger(KEY_JPEG_QUALITY);
     }
@@ -77,9 +79,24 @@ SimpleJPEGExporter.prototype.getOptions = function() {
       this.silentOverwrite = desc.getBoolean(KEY_SILENT_OVERWRITE);
     }
   } catch (e) {
-    // ignore - will use defaults...
-    this.exportFolder = app.activeDocument.path;
-    this.setDefaultOptions();
+    // An exception will be thrown if the settings haven't already
+    // been saved. So ignore it.
+  }
+};
+
+/**
+ * Main entry point for this script.
+ */
+SimpleJPEGExporter.prototype.run = function() {
+  if (app.documents.length === 0) {
+    Window.alert('There are no open images to export.');
+  } else {
+    // Build the UI
+    this.buildDialog();
+    // Initialize UI control event handlers
+    this.initEventHandlers();
+    // Show the dialog
+    this.windowRef.show();
   }
 };
 
@@ -93,46 +110,34 @@ SimpleJPEGExporter.prototype.putOptions = function() {
   desc.putInteger(KEY_MAX_IMAGE_SIZE, this.maxImageSize);
   desc.putBoolean(KEY_CLOSE_AFTER_EXPORT, this.closeAfterExport);
   desc.putBoolean(KEY_SILENT_OVERWRITE, this.silentOverwrite);
-  app.putCustomOptions(SETTINGS_KEY, desc);
-//  Window.alert('Saved settings.');
-};
-
-/**
- *  Reset this dialog's current options to default values.
- */
-SimpleJPEGExporter.prototype.resetOptions = function() {
   try {
-    this.setDefaultOptions();
-    app.eraseCustomOptions(SETTINGS_KEY);
+    app.putCustomOptions(SETTINGS_KEY, desc);
   } catch (e) {
-    // ignore...
+    Window.alert('Error saving settings\n' + e);
   }
 };
 
 /**
  * OK, take care of business...
+ * Export all open image documents.
+ *
+ * This is invoked when the user clicks 'OK'...
  */
 SimpleJPEGExporter.prototype.doit = function() {
   // Save current prefs and settings to restore later
   var originalRulerUnits = preferences.rulerUnits;
   var originalBgColor = app.backgroundColor;
-  var originalActiveDoc = app.activeDocument;
   var originalDisplayDialogs = app.displayDialogs;
-
   var status = EXPORT_FAILED;
+
   try {
     status = this.exportAll();
-  } catch (e) {
-    // Exceptions should have been caught already but
-    // this a safety to catch bug-related exceptions.
-    Window.alert('Script failed:\n' + e);
+  } finally {
+    // Restore prefs and document settings
+    preferences.rulerUnits = originalRulerUnits;
+    app.backgroundColor = originalBgColor;
+    app.displayDialogs = originalDisplayDialogs;
   }
-
-  // Restore prefs and document settings
-  preferences.rulerUnits = originalRulerUnits;
-  app.activeDocument = originalActiveDoc;
-  app.backgroundColor = originalBgColor;
-  app.displayDialogs = originalDisplayDialogs;
 
   return status;
 };
@@ -161,11 +166,9 @@ SimpleJPEGExporter.prototype.exportAll = function() {
       status = EXPORT_RETRY;
       break;
     }
-    app.activeDocument = srcDoc;
 
     // Make a temporary copy of the current active document.
     var tmpDoc = srcDoc.duplicate('untitled', true);
-//    Window.alert('src: ' + srcDoc.fullName.fsName + '\ndst: ' + jpegFile.fsName);
     try {
       this.exportJPEG(srcDoc, tmpDoc, destPath,
                       this.maxImageSize, jpegQuality, null);
@@ -213,6 +216,12 @@ SimpleJPEGExporter.prototype.exportJPEG = function(
 
 /**
  * Process and resize the temporary image document to make it JPEG friendly.
+ *
+ * @param {Document} doc - The Photoshop source image document.
+ * @param {number} maxSize - The maximum height/width of the exported image.
+ * @param {number} jpegQuality - The JPEG output quality 10-100%.
+ * @param {string} bgColor - The background color used for letterboxing.
+ *      Can be null, in which case no letterboxing is performed.
  */
 SimpleJPEGExporter.prototype.processJPEG = function(
     doc, maxSize, jpegQuality, bgColor
@@ -264,6 +273,8 @@ SimpleJPEGExporter.prototype.processJPEG = function(
 
 /**
  * Build the dialog UI and controls.
+ *
+ * @returns {Window} The dialog Window object
  */
 SimpleJPEGExporter.prototype.buildDialog = function() {
   var dlgResource =
@@ -297,6 +308,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
             'maxSize: EditText { text: "1920", characters: 4 },' +
           '}' +
         '}' +
+        /*
         'closeGrp: Group {' +
           'alignment:"right",' +
           'labelTxt: StaticText { text: "Close images after export:" },' +
@@ -304,13 +316,19 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
             'alignment: "left",' +
             'size: [300, 30],' +
             'closeAfterExportChk: Checkbox { value: false },' +
+          '}' +
         '}' +
-      '}' +
+        */
         'resetGrp: Group {' +
           'alignment:"right",' +
           'labelTxt: StaticText { text: "" },' +
           'resetBtn: Button { text: "Default Values" },' +
         '}' +
+      '}' +
+      'closeGrp: Group {' +
+        'alignment:"left",' +
+        'labelTxt: StaticText { text: "Close images after export:" },' +
+        'closeAfterExportChk: Checkbox { value: false },' +
       '}' +
       'okGrp: Group {' +
         'alignment: "right",' +
@@ -326,14 +344,14 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   this.guiJpgQuality = win.settingsPnl.jpgGrp.jpqQGrp.jpgQuality;
   this.guiJpgSlider = win.settingsPnl.jpgGrp.jpqQGrp.jpgSlider;
   this.guiMaxSize = win.settingsPnl.sizeGrp.sizeSubGrp.maxSize;
-  this.guiCloseAfterExportChk = win.settingsPnl.closeGrp.closeSubGrp.closeAfterExportChk;
   this.guiResetBtn = win.settingsPnl.resetGrp.resetBtn;
+  this.guiCloseAfterExportChk = win.closeGrp.closeAfterExportChk;
   this.guiCancelBtn = win.okGrp.cancelBtn;
   this.guiOkBtn = win.okGrp.okBtn;
 
   // Initialize widget values
   var folderPath = Folder.decode(this.exportFolder.fsName);
-  this.guiFolderPath.text = folderPath;// this.truncatePath(folderPath);
+  this.guiFolderPath.text = this.truncatePath(folderPath);
   // The characters property is somehow ignored so...
   this.guiFolderPath.minimumSize = [400, 0];
   this.guiJpgQuality.text = this.jpegQuality + '%';
@@ -353,6 +371,9 @@ SimpleJPEGExporter.prototype.truncatePath = function(path) {
   return path;
 };
 
+/**
+ * Initialize event handlers for the UI widgets.
+ */
 SimpleJPEGExporter.prototype.initEventHandlers = function() {
   // Cache this scope to make it visible to event handlers.
   var outerThis = this;
@@ -361,8 +382,10 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
     var folder = outerThis.exportFolder.selectDlg('Choose export folder');
     var folderPath = Folder.decode(folder.fsName);
     outerThis.exportFolder = folder;
-    outerThis.guiFolderPath.text = folderPath; //this.truncatePath(folderPath);
+    outerThis.guiFolderPath.text = this.truncatePath(folderPath);
     outerThis.guiFolderPath.characters = folderPath.length;
+    // For some reason it seems impossible to resize the dialog
+    // to fit the new pathname...
 //    outerThis.guiFolderPath.preferredSize = [-1, -1];
 //    outerThis.windowRef.folderGrp.layout.layout(true);
 //    outerThis.windowRef.folderGrp.layout.resize();
@@ -401,7 +424,10 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
   };
 
   this.guiResetBtn.onClick = function() {
-    outerThis.setDefaultOptions();
+    // Settings to default values
+    outerThis.jpegQuality = DEFAULT_JPEG_QUALITY;
+    outerThis.maxImageSize = DEFAULT_MAX_IMAGE_SIZE;
+    // Update UI
     outerThis.guiJpgSlider.value = outerThis.jpegQuality;
     outerThis.guiJpgQuality.text = outerThis.jpegQuality + '%';
     outerThis.guiMaxSize.text = String(outerThis.maxImageSize);
@@ -412,8 +438,13 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
   };
 
   this.guiOkBtn.onClick = function() {
+    var status = EXPORT_FAILED;
     // Export open documents.
-    var status = outerThis.doit();
+    try {
+      status = outerThis.doit();
+    } catch (e) {
+      Window.alert('Export failed: \n' + e);
+    }
     if (status != EXPORT_RETRY) {
       // Save current settings.
       outerThis.putOptions();
@@ -424,27 +455,19 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
 };
 
 /**
- *
- */
-SimpleJPEGExporter.prototype.run = function() {
-  if (app.documents.length === 0) {
-    Window.alert('There are no open images to export.');
-  } else {
-    // Build the UI
-    this.buildDialog();
-    // Initialize UI control event handlers
-    this.initEventHandlers();
-    // Show the dialog
-    this.windowRef.show();
-  }
-};
-
-/**
  * "main program": construct an anonymous instance and run it
  * as long as we are not unit-testing this snippet.
  */
 if (typeof(SimpleJPEGExporter_unitTest) == "undefined") {
-  new SimpleJPEGExporter().run();
+  try {
+    new SimpleJPEGExporter().run();
+  } catch (e) {
+    // This should never happen but if scripts throw an unhandled
+    // exception it seems to screw things up with Photoshop's
+    // script handler...
+    // TODO: fail silently?
+    Window.alert('Script failed:\n' + e);
+  }
 }
 
 
