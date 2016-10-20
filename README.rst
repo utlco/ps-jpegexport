@@ -43,7 +43,7 @@ the scripts folder.
 
 Photoshop script folder location
 ................................
--
+
 * MacOS, Linux:
 
    `/Applications/Adobe Photoshop CC 2015.5/Presets/Scripts`
@@ -55,6 +55,10 @@ Photoshop script folder location
 * Windows:
 
    `C:\\Users\\YourUserName\\.AppData\\Roaming\\Adobe\\Photoshop\\...\\Scripts`
+
+If these locations are incorrect on your platform please open a new
+`issue <https://github.com/utlco/ps-jpegexport/issues>`_ and I'll update
+the docs.
 
 Usage
 -----
