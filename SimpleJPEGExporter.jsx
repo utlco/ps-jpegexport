@@ -282,7 +282,8 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
       'folderGrp: Group {' +
         'alignment: "left",' +
         'orientation: "column",' +
-        'folderPath: StaticText { alignment:"left", text:"", characters: 120 },' +
+        'folderPath: StaticText {' +
+          'alignment:"left", characters: 80, minimumSize: [450, 0]},' +
         'folderBtn: Button { alignment:"left", text:"Choose Export Folder"},' +
       '}' +
       'settingsPnl: Panel {' +
@@ -352,8 +353,6 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   // Initialize widget values
   var folderPath = Folder.decode(this.exportFolder.fsName);
   this.guiFolderPath.text = this.truncatePath(folderPath);
-  // The characters property is somehow ignored so...
-  this.guiFolderPath.minimumSize = [400, 0];
   this.guiJpgQuality.text = this.jpegQuality + '%';
   this.guiJpgSlider.value = this.jpegQuality;
   this.guiMaxSize.text = String(this.maxImageSize);
@@ -367,8 +366,12 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
  * Truncate unreasonably long path strings to make them fit in the dialog.
  */
 SimpleJPEGExporter.prototype.truncatePath = function(path) {
-  // TODO: implement this
-  return path;
+  var pathLen = path.length;
+  var truncatedPath = path;
+  if (pathLen > MAX_UI_PATH_LEN) {
+    truncatedPath = '.....' + path.substring(pathLen - MAX_UI_PATH_LEN);
+  }
+  return truncatedPath;
 };
 
 /**
@@ -382,7 +385,7 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
     var folder = outerThis.exportFolder.selectDlg('Choose export folder');
     var folderPath = Folder.decode(folder.fsName);
     outerThis.exportFolder = folder;
-    outerThis.guiFolderPath.text = this.truncatePath(folderPath);
+    outerThis.guiFolderPath.text = outerThis.truncatePath(folderPath);
     outerThis.guiFolderPath.characters = folderPath.length;
     // For some reason it seems impossible to resize the dialog
     // to fit the new pathname...
