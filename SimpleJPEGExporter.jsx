@@ -22,8 +22,11 @@
 // END__HARVEST_EXCEPTION_ZSTRING
 */
 
-// This is probably unnecessary...
-//#target photoshop
+// The target declaration is probably unnecessary...
+// This script won't be invoked outside of Photoshop.
+/*
+#target photoshop
+*/
 
 var DEFAULT_JPEG_QUALITY = 75;
 var MIN_JPEG_QUALITY = 10;
@@ -97,23 +100,6 @@ SimpleJPEGExporter.prototype.run = function() {
     this.initEventHandlers();
     // Show the dialog
     this.windowRef.show();
-  }
-};
-
-/**
- *  Persist this dialog's current option values.
- */
-SimpleJPEGExporter.prototype.putOptions = function() {
-  var desc = new ActionDescriptor();
-  desc.putString(KEY_EXPORT_FOLDER, this.exportFolder.fullName);
-  desc.putInteger(KEY_JPEG_QUALITY, this.jpegQuality);
-  desc.putInteger(KEY_MAX_IMAGE_SIZE, this.maxImageSize);
-  desc.putBoolean(KEY_CLOSE_AFTER_EXPORT, this.closeAfterExport);
-  desc.putBoolean(KEY_SILENT_OVERWRITE, this.silentOverwrite);
-  try {
-    app.putCustomOptions(SETTINGS_KEY, desc);
-  } catch (e) {
-    Window.alert('Error saving settings\n' + e);
   }
 };
 
@@ -272,6 +258,87 @@ SimpleJPEGExporter.prototype.processJPEG = function(
 };
 
 /**
+ * Initialize event handlers for the UI widgets.
+ */
+SimpleJPEGExporter.prototype.initEventHandlers = function() {
+  // TODO: hoist these handler functions?
+  // Cache this scope to make it visible to event handlers.
+  var outerThis = this;
+
+  this.guiFolderBtn.onClick = function() {
+    var folder = outerThis.exportFolder.selectDlg('Choose export folder');
+    var folderPath = Folder.decode(folder.fsName);
+    outerThis.exportFolder = folder;
+    outerThis.guiFolderPath.text = outerThis.truncatePath(folderPath);
+    outerThis.guiFolderPath.characters = folderPath.length;
+    // For some reason it seems impossible to resize the dialog
+    // to fit the new pathname without mangling the layout...
+    // outerThis.windowRef.layout.layout(true);
+  };
+
+  this.guiJpgSlider.onChanging = function() {
+    var val = Math.round(this.value);
+    outerThis.guiJpgQuality.text = val + '%';
+    outerThis.jpegQuality = val;
+  };
+
+  this.guiJpgQuality.onChange = function() {
+    var val = parseInt(this.text);
+    if (isNaN(val)) {
+      val = outerThis.jpegQuality;
+    }
+    val = Math.max(Math.min(100, val), MIN_JPEG_QUALITY);
+    this.text = val + '%';
+    outerThis.guiJpgSlider.value = val;
+    outerThis.jpegQuality = val;
+  };
+
+  this.guiMaxSize.onChange = function() {
+    var val = parseInt(this.text);
+    if (isNaN(val)) {
+      val = outerThis.maxImageSize;
+    }
+    val = Math.max(val, 1);
+    this.text = String(val);
+    outerThis.maxImageSize = val;
+  };
+
+  this.guiCloseAfterExportChk.onClick = function() {
+    outerThis.closeAfterExport = this.value;
+  };
+
+  this.guiResetBtn.onClick = function() {
+    // Settings to default values
+    outerThis.jpegQuality = DEFAULT_JPEG_QUALITY;
+    outerThis.maxImageSize = DEFAULT_MAX_IMAGE_SIZE;
+    // Update UI
+    outerThis.guiJpgSlider.value = outerThis.jpegQuality;
+    outerThis.guiJpgQuality.text = outerThis.jpegQuality + '%';
+    outerThis.guiMaxSize.text = String(outerThis.maxImageSize);
+  };
+
+  this.guiCancelBtn.onClick = function() {
+    outerThis.windowRef.close();
+  };
+
+  this.guiOkBtn.onClick = function() {
+    var status = EXPORT_FAILED;
+    // Export open documents.
+    try {
+      status = outerThis.doit();
+    } catch (e) {
+      Window.alert('Export failed: \n' + e);
+    }
+    if (status != EXPORT_RETRY) {
+      // Save current settings.
+      outerThis.putOptions();
+      // Close dialog and quit.
+      outerThis.windowRef.close();
+    }
+  };
+};
+
+/**
  * Build the dialog UI and controls.
  *
  * @returns {Window} The dialog Window object
@@ -375,87 +442,22 @@ SimpleJPEGExporter.prototype.truncatePath = function(path) {
 };
 
 /**
- * Initialize event handlers for the UI widgets.
+ *  Persist this dialog's current option values.
  */
-SimpleJPEGExporter.prototype.initEventHandlers = function() {
-  // Cache this scope to make it visible to event handlers.
-  var outerThis = this;
-
-  this.guiFolderBtn.onClick = function() {
-    var folder = outerThis.exportFolder.selectDlg('Choose export folder');
-    var folderPath = Folder.decode(folder.fsName);
-    outerThis.exportFolder = folder;
-    outerThis.guiFolderPath.text = outerThis.truncatePath(folderPath);
-    outerThis.guiFolderPath.characters = folderPath.length;
-    // For some reason it seems impossible to resize the dialog
-    // to fit the new pathname...
-//    outerThis.guiFolderPath.preferredSize = [-1, -1];
-//    outerThis.windowRef.folderGrp.layout.layout(true);
-//    outerThis.windowRef.folderGrp.layout.resize();
-//    outerThis.windowRef.layout.layout();
-  };
-
-  this.guiJpgSlider.onChanging = function() {
-    var val = Math.round(this.value);
-    outerThis.guiJpgQuality.text = val + '%';
-    outerThis.jpegQuality = val;
-  };
-
-  this.guiJpgQuality.onChange = function() {
-    var val = parseInt(this.text);
-    if (isNaN(val)) {
-      val = outerThis.jpegQuality;
-    }
-    val = Math.max(Math.min(100, val), MIN_JPEG_QUALITY);
-    this.text = val + '%';
-    outerThis.guiJpgSlider.value = val;
-    outerThis.jpegQuality = val;
-  };
-
-  this.guiMaxSize.onChange = function() {
-    var val = parseInt(this.text);
-    if (isNaN(val)) {
-      val = outerThis.maxImageSize;
-    }
-    val = Math.max(val, 1);
-    this.text = String(val);
-    outerThis.maxImageSize = val;
-  };
-
-  this.guiCloseAfterExportChk.onClick = function() {
-    outerThis.closeAfterExport = this.value;
-  };
-
-  this.guiResetBtn.onClick = function() {
-    // Settings to default values
-    outerThis.jpegQuality = DEFAULT_JPEG_QUALITY;
-    outerThis.maxImageSize = DEFAULT_MAX_IMAGE_SIZE;
-    // Update UI
-    outerThis.guiJpgSlider.value = outerThis.jpegQuality;
-    outerThis.guiJpgQuality.text = outerThis.jpegQuality + '%';
-    outerThis.guiMaxSize.text = String(outerThis.maxImageSize);
-  };
-
-  this.guiCancelBtn.onClick = function() {
-    outerThis.windowRef.close();
-  };
-
-  this.guiOkBtn.onClick = function() {
-    var status = EXPORT_FAILED;
-    // Export open documents.
-    try {
-      status = outerThis.doit();
-    } catch (e) {
-      Window.alert('Export failed: \n' + e);
-    }
-    if (status != EXPORT_RETRY) {
-      // Save current settings.
-      outerThis.putOptions();
-      // Close dialog and quit.
-      outerThis.windowRef.close();
-    }
-  };
+SimpleJPEGExporter.prototype.putOptions = function() {
+  var desc = new ActionDescriptor();
+  desc.putString(KEY_EXPORT_FOLDER, this.exportFolder.fullName);
+  desc.putInteger(KEY_JPEG_QUALITY, this.jpegQuality);
+  desc.putInteger(KEY_MAX_IMAGE_SIZE, this.maxImageSize);
+  desc.putBoolean(KEY_CLOSE_AFTER_EXPORT, this.closeAfterExport);
+  desc.putBoolean(KEY_SILENT_OVERWRITE, this.silentOverwrite);
+  try {
+    app.putCustomOptions(SETTINGS_KEY, desc);
+  } catch (e) {
+    Window.alert('Error saving settings\n' + e);
+  }
 };
+
 
 /**
  * "main program": construct an anonymous instance and run it
