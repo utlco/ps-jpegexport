@@ -20,6 +20,8 @@ Also, the color profile will be converted to sRGB.
 It works like a batch export in that all currently opened images
 will be exported.
 
+.. figure:: _images/dialog.png
+
 Installation
 ------------
 
