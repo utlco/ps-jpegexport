@@ -345,7 +345,7 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
  */
 SimpleJPEGExporter.prototype.buildDialog = function() {
   var dlgResource =
-    'dialog { text:"Resize and Export JPEGs 4",' +
+    'dialog { text:"Simple JPEG Exporter",' +
       'folderGrp: Group {' +
         'alignment: "left",' +
         'orientation: "column",' +
