@@ -71,8 +71,14 @@ The script will export all the images currently open in Photoshop.
 The original images will not be modified.
 
 From the script dialog you can choose the destination folder
-for exported JPEGs. The default settings should be fine for
+for exported JPEGs.
+
+The default JPEG settings should be fine for
 most applications. The exported JPEG will most likely be under
 2mb. If it is larger than the maximum allowed by the application
 then you can try lowering the JPEG quality setting a bit.
+
+Note:
+Images smaller than the specified *Max image size* will be scaled up
+to fit.
 

@@ -376,17 +376,6 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
             'maxSize: EditText { text: "1920", characters: 4 },' +
           '}' +
         '}' +
-        /*
-        'closeGrp: Group {' +
-          'alignment:"right",' +
-          'labelTxt: StaticText { text: "Close images after export:" },' +
-          'closeSubGrp: Group {' +
-            'alignment: "left",' +
-            'size: [300, 30],' +
-            'closeAfterExportChk: Checkbox { value: false },' +
-          '}' +
-        '}' +
-        */
         'resetGrp: Group {' +
           'alignment:"right",' +
           'labelTxt: StaticText { text: "" },' +
