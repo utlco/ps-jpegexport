@@ -5,9 +5,11 @@
  * compatible with various online art application platforms.
  *
  * @author Claude Zervas
- * @copyright Claude Zervas 2016
+ * @copyright Copyright 2016 Claude Zervas
  * @license GPL V3
  *
+ * Loosely follows the Google JavaScript Style Guide:
+ * https://google.github.io/styleguide/javascriptguide.xml
  */
 
 /*
@@ -29,9 +31,15 @@
 */
 
 var DEFAULT_JPEG_QUALITY = 75;
-var MIN_JPEG_QUALITY = 10;
+//var MIN_JPEG_QUALITY = 10;
 var DEFAULT_MAX_IMAGE_SIZE = 1920;
 var MAX_UI_PATH_LEN = 60;
+var FILE_SUFFIX = '-copy';
+// Image size detente step values for size slider control.
+var SIZE_STEPS = [100, 240, 480, 600, 720, 800, 1000, 1280, 1600, 1920, 2048];
+// JPEG quality detente step values for jpeg quality slider control.
+var JPEG_STEPS = [30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+
 var KEY_EXPORT_FOLDER = app.stringIDToTypeID('exportFolder');
 var KEY_JPEG_QUALITY = app.stringIDToTypeID('jpegQuality');
 var KEY_MAX_IMAGE_SIZE = app.stringIDToTypeID('maxImageSize');
@@ -44,6 +52,9 @@ var EXPORT_FAILED = -2;
 var EXPORT_OK = 1;
 
 /**
+ * Initialize properties with defaults and load any
+ * previously saved settings.
+ *
  * @constructor Constructor.
  */
 function SimpleJPEGExporter() {
@@ -57,34 +68,14 @@ function SimpleJPEGExporter() {
   this.closeAfterExport = false;
   // Silently overwrite existing file with exported JPEG.
   // The user will still be alerted if the source document has the same path.
-  this.silentOverwrite = true;
+  this.silentOverwrite = false;
   // Close the temporary copy after export (can be set to false for debugging)
   this.closeTmpAfterExport = true;
   // The folder where the exported JPEGs will be saved
   this.exportFolder = app.activeDocument.path;
 
-  // Get stored options - these override defaults if present.
-  try {
-    var desc = app.getCustomOptions(SETTINGS_KEY);
-    if (desc.hasKey(KEY_EXPORT_FOLDER)) {
-      this.exportFolder = Folder(desc.getString(KEY_EXPORT_FOLDER));
-    }
-    if (desc.hasKey(KEY_JPEG_QUALITY)) {
-      this.jpegQuality = desc.getInteger(KEY_JPEG_QUALITY);
-    }
-    if (desc.hasKey(KEY_MAX_IMAGE_SIZE)) {
-      this.maxImageSize = desc.getInteger(KEY_MAX_IMAGE_SIZE);
-    }
-    if (desc.hasKey(KEY_CLOSE_AFTER_EXPORT)) {
-      this.closeAfterExport = desc.getBoolean(KEY_CLOSE_AFTER_EXPORT);
-    }
-    if (desc.hasKey(KEY_SILENT_OVERWRITE)) {
-      this.silentOverwrite = desc.getBoolean(KEY_SILENT_OVERWRITE);
-    }
-  } catch (e) {
-    // An exception will be thrown if the settings haven't already
-    // been saved. So ignore it.
-  }
+  // Get stored settings/options - these override defaults if present.
+  this.getSettings();
 };
 
 /**
@@ -96,7 +87,7 @@ SimpleJPEGExporter.prototype.run = function() {
   } else {
     // Build the UI
     this.buildDialog();
-    // Initialize UI control event handlers
+    // Initialize event handlers for the UI widgets
     this.initEventHandlers();
     // Show the dialog
     this.windowRef.show();
@@ -108,8 +99,10 @@ SimpleJPEGExporter.prototype.run = function() {
  * Export all open image documents.
  *
  * This is invoked when the user clicks 'OK'...
+ *
+ * @returns The export status.
  */
-SimpleJPEGExporter.prototype.doit = function() {
+SimpleJPEGExporter.prototype.okGo = function() {
   // Save current prefs and settings to restore later
   var originalRulerUnits = preferences.rulerUnits;
   var originalBgColor = app.backgroundColor;
@@ -130,7 +123,8 @@ SimpleJPEGExporter.prototype.doit = function() {
 
 /**
  *  Export all currently open images.
- *  @return True if the export succeeded.
+ *
+ *  @return The export status: EXPORT_OK, EXPORT_RETRY, or EXPORT_FAILED.
  */
 SimpleJPEGExporter.prototype.exportAll = function() {
   var status = EXPORT_OK;
@@ -142,62 +136,53 @@ SimpleJPEGExporter.prototype.exportAll = function() {
 
   for (var i = 0; i < numDocs; i++) {
     var srcDoc = app.documents[i];
-    var destPath = this.exportFolder.fullName + '/' + srcDoc.name;
+    var srcFilename = srcDoc.name;
+    var extindex = srcFilename.lastIndexOf('.');
+    var basename = srcFilename.substr(0, extindex) || srcFilename;
+//    var extension = srcFilename.substr(extindex, srcFilename.length) || '';
+//    extension = extension.toLowerCase();
+    var destPath = this.exportFolder.fullName + '/' + basename + '.jpg';
     var jpegFile = File(destPath);
 
     if (jpegFile.fsName == srcDoc.fullName.fsName) {
       Window.alert('Cannot overwrite the original image file: ' +
                    srcDoc.name + '\n' +
                    'Please choose a different export folder.');
+      // Allow the user to choose a different export folder or cancel.
       status = EXPORT_RETRY;
       break;
+    }
+
+    if (!this.silentOverwrite && jpegFile.exists) {
+      var overwrite = Window.confirm('Overwrite existing output file?\n' +
+                                     jpegFile.fsName);
+      if (!overwrite) {
+        status = EXPORT_RETRY;
+        break;
+      }
     }
 
     // Make a temporary copy of the current active document.
     var tmpDoc = srcDoc.duplicate('untitled', true);
     try {
-      this.exportJPEG(srcDoc, tmpDoc, destPath,
-                      this.maxImageSize, jpegQuality, null);
+      jpegOptions = this.processJPEG(tmpDoc, this.maxImageSize, jpegQuality);
+      tmpDoc.saveAs(jpegFile, jpegOptions, true, Extension.LOWERCASE);
     } catch (e) {
       Window.alert('Exporting ' + srcDoc.name + ' failed:\n' + e);
       status = EXPORT_FAILED;
       break;
-    }
-
-    if (this.closeTmpAfterExport) {
-      try {
+    } finally {
+      if (this.closeTmpAfterExport) {
         tmpDoc.close(SaveOptions.DONOTSAVECHANGES);
-      } catch (e) {
-        Window.alert('Error closing temporary document: \n' + e);
       }
     }
-  }
-  if (status == EXPORT_OK && this.closeAfterExport) {
-    // Close all open documents.
-    while (app.documents.length > 0)  {
-      app.documents[0].close(SaveOptions.PROMPTTOSAVECHANGES);
+
+    // Close the source image document if required.
+    if (this.closeAfterExport) {
+      srcDoc.close(SaveOptions.PROMPTTOSAVECHANGES);
     }
   }
   return status;
-};
-
-/**
- * Export the temporary image document as a JPEG file.
- */
-SimpleJPEGExporter.prototype.exportJPEG = function(
-    srcDoc, tmpDoc, destPath, maxSize, jpegQuality, bgColor
-) {
-  jpegOptions = this.processJPEG(tmpDoc, maxSize, jpegQuality, bgColor);
-  jpegFile = File(destPath);
-  // If the source and destination paths are the same then confirm overwrite.
-  var saveit = true;
-  if (saveit) {
-    try {
-      tmpDoc.saveAs(jpegFile, jpegOptions, true, Extension.LOWERCASE);
-    } catch (e) {
-      Window.alert('Can\'t export file:\n' + File.decode(jpegFile.fsName));
-    }
-  }
 };
 
 /**
@@ -208,6 +193,8 @@ SimpleJPEGExporter.prototype.exportJPEG = function(
  * @param {number} jpegQuality - The JPEG output quality 10-100%.
  * @param {string} bgColor - The background color used for letterboxing.
  *      Can be null, in which case no letterboxing is performed.
+ *
+ * @returns {JPEGOptions}
  */
 SimpleJPEGExporter.prototype.processJPEG = function(
     doc, maxSize, jpegQuality, bgColor
@@ -261,10 +248,11 @@ SimpleJPEGExporter.prototype.processJPEG = function(
  * Initialize event handlers for the UI widgets.
  */
 SimpleJPEGExporter.prototype.initEventHandlers = function() {
-  // TODO: hoist these handler functions?
+  // TODO: hoist these event handler functions?
   // Cache this scope to make it visible to event handlers.
   var outerThis = this;
 
+  // Handle clicks on the "Choose Export Folder" button.
   this.guiFolderBtn.onClick = function() {
     var folder = outerThis.exportFolder.selectDlg('Choose export folder');
     var folderPath = Folder.decode(folder.fsName);
@@ -276,35 +264,59 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
     // outerThis.windowRef.layout.layout(true);
   };
 
+  // Update JPEG quality when the slider is changed.
   this.guiJpgSlider.onChanging = function() {
-    var val = Math.round(this.value);
+    var stepIndex = findStepIndex(this.value, JPEG_STEPS);
+    var val = JPEG_STEPS[stepIndex];//Math.round(this.value);
+    this.value = val;
     outerThis.guiJpgQuality.text = val + '%';
     outerThis.jpegQuality = val;
   };
 
+  // Handle changes to the JPEG quality text box
   this.guiJpgQuality.onChange = function() {
     var val = parseInt(this.text);
     if (isNaN(val)) {
       val = outerThis.jpegQuality;
     }
-    val = Math.max(Math.min(100, val), MIN_JPEG_QUALITY);
+    val = Math.min(Math.max(val, JPEG_STEPS[0]),
+                   JPEG_STEPS[JPEG_STEPS.length - 1]);
     this.text = val + '%';
+    // Update the slider position
     outerThis.guiJpgSlider.value = val;
     outerThis.jpegQuality = val;
   };
 
+  // Handle changes to the image size text box
   this.guiMaxSize.onChange = function() {
     var val = parseInt(this.text);
     if (isNaN(val)) {
+      // User input some bogus text - revert to previous value.
       val = outerThis.maxImageSize;
     }
-    val = Math.max(val, 1);
+    // Limit image size to a reasonable minimum/maximum.
+    val = Math.min(Math.max(val, SIZE_STEPS[0]),
+                   SIZE_STEPS[SIZE_STEPS.length - 1]);
     this.text = String(val);
+    outerThis.guiSizeSlider.value = val;
+    outerThis.maxImageSize = val;
+  };
+
+  // Update max size when the slider is changed.
+  this.guiSizeSlider.onChanging = function() {
+    var stepIndex = findStepIndex(this.value, SIZE_STEPS);
+    var val = SIZE_STEPS[stepIndex];
+    this.value = val;
+    outerThis.guiMaxSize.text = String(val);
     outerThis.maxImageSize = val;
   };
 
   this.guiCloseAfterExportChk.onClick = function() {
     outerThis.closeAfterExport = this.value;
+  };
+
+  this.guiSilentOverwriteChk.onClick = function() {
+    outerThis.silentOverwrite = this.value;
   };
 
   this.guiResetBtn.onClick = function() {
@@ -315,6 +327,7 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
     outerThis.guiJpgSlider.value = outerThis.jpegQuality;
     outerThis.guiJpgQuality.text = outerThis.jpegQuality + '%';
     outerThis.guiMaxSize.text = String(outerThis.maxImageSize);
+    outerThis.guiSizeSlider.value = outerThis.maxImageSize;
   };
 
   this.guiCancelBtn.onClick = function() {
@@ -325,13 +338,13 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
     var status = EXPORT_FAILED;
     // Export open documents.
     try {
-      status = outerThis.doit();
+      status = outerThis.okGo();
     } catch (e) {
       Window.alert('Export failed: \n' + e);
     }
     if (status != EXPORT_RETRY) {
       // Save current settings.
-      outerThis.putOptions();
+      outerThis.putSettings();
       // Close dialog and quit.
       outerThis.windowRef.close();
     }
@@ -364,7 +377,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
             'alignment: "left",' +
             'size: [300, 30],' +
             'jpgQuality: EditText { text: "", characters: 4 },' +
-            'jpgSlider: Slider { minvalue: 10, maxvalue: 100, value: 75 },' +
+            'jpgSlider: Slider { size: [150, 30] },' +
           '}' +
         '}' +
         'sizeGrp: Group {' +
@@ -374,6 +387,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
             'alignment: "left",' +
             'size: [300, 30],' +
             'maxSize: EditText { text: "1920", characters: 4 },' +
+            'sizeSlider: Slider { size: [150, 30] },' +
           '}' +
         '}' +
         'resetGrp: Group {' +
@@ -384,8 +398,13 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
       '}' +
       'closeGrp: Group {' +
         'alignment:"left",' +
-        'labelTxt: StaticText { text: "Close images after export:" },' +
+        'labelTxt: StaticText { text: "Close images after export" },' +
         'closeAfterExportChk: Checkbox { value: false },' +
+      '}' +
+      'overwrtGrp: Group {' +
+        'alignment:"left",' +
+        'labelTxt: StaticText { text: "Overwrite existing image files" },' +
+        'silentOverwriteChk: Checkbox { value: false },' +
       '}' +
       'okGrp: Group {' +
         'alignment: "right",' +
@@ -401,8 +420,10 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   this.guiJpgQuality = win.settingsPnl.jpgGrp.jpqQGrp.jpgQuality;
   this.guiJpgSlider = win.settingsPnl.jpgGrp.jpqQGrp.jpgSlider;
   this.guiMaxSize = win.settingsPnl.sizeGrp.sizeSubGrp.maxSize;
+  this.guiSizeSlider = win.settingsPnl.sizeGrp.sizeSubGrp.sizeSlider;
   this.guiResetBtn = win.settingsPnl.resetGrp.resetBtn;
   this.guiCloseAfterExportChk = win.closeGrp.closeAfterExportChk;
+  this.guiSilentOverwriteChk = win.overwrtGrp.silentOverwriteChk;
   this.guiCancelBtn = win.okGrp.cancelBtn;
   this.guiOkBtn = win.okGrp.okBtn;
 
@@ -410,9 +431,15 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   var folderPath = Folder.decode(this.exportFolder.fsName);
   this.guiFolderPath.text = this.truncatePath(folderPath);
   this.guiJpgQuality.text = this.jpegQuality + '%';
+  this.guiJpgSlider.minvalue = JPEG_STEPS[0];
+  this.guiJpgSlider.maxvalue = JPEG_STEPS[JPEG_STEPS.length - 1];
   this.guiJpgSlider.value = this.jpegQuality;
   this.guiMaxSize.text = String(this.maxImageSize);
+  this.guiSizeSlider.minvalue = SIZE_STEPS[0];
+  this.guiSizeSlider.maxvalue = SIZE_STEPS[SIZE_STEPS.length - 1];
+  this.guiSizeSlider.value = this.maxImageSize;
   this.guiCloseAfterExportChk.value = this.closeAfterExport;
+  this.guiSilentOverwriteChk.value = this.silentOverwrite;
 
   this.windowRef = win;
   return this.windowRef;
@@ -431,9 +458,29 @@ SimpleJPEGExporter.prototype.truncatePath = function(path) {
 };
 
 /**
- *  Persist this dialog's current option values.
+ * Fetch persistent dialog settings.
  */
-SimpleJPEGExporter.prototype.putOptions = function() {
+SimpleJPEGExporter.prototype.getSettings = function() {
+  try {
+    var desc = app.getCustomOptions(SETTINGS_KEY);
+    this.exportFolder = Folder(desc.getString(KEY_EXPORT_FOLDER));
+    this.jpegQuality = desc.getInteger(KEY_JPEG_QUALITY);
+    this.maxImageSize = desc.getInteger(KEY_MAX_IMAGE_SIZE);
+    this.closeAfterExport = desc.getBoolean(KEY_CLOSE_AFTER_EXPORT);
+    this.silentOverwrite = desc.getBoolean(KEY_SILENT_OVERWRITE);
+    // Add future options at the end here to avoid skipping existing ones
+    // if an exception is thrown.
+  } catch (e) {
+    // An exception will be thrown if settings haven't
+    // been saved. Just ignore it. This only happens the first time
+    // the script is used or if a new setting is added.
+  }
+};
+
+/**
+ *  Persist this dialog's current settings.
+ */
+SimpleJPEGExporter.prototype.putSettings = function() {
   var desc = new ActionDescriptor();
   desc.putString(KEY_EXPORT_FOLDER, this.exportFolder.fullName);
   desc.putInteger(KEY_JPEG_QUALITY, this.jpegQuality);
@@ -443,23 +490,48 @@ SimpleJPEGExporter.prototype.putOptions = function() {
   try {
     app.putCustomOptions(SETTINGS_KEY, desc);
   } catch (e) {
-    Window.alert('Error saving settings\n' + e);
+    // This shouldn't happen...
+    Window.alert('Error saving settings:\n' + e);
   }
 };
 
 
 /**
- * "main program": construct an anonymous instance and run it
+ * Find a step array index for the given value.
+ *
+ * @param {Number} val
+ * @param {Array} steps
+ *
+ * @returns {Number} An index into the step array.
+ */
+function findStepIndex(val, steps) {
+  var stepIndex = 0;
+  var lastInterval = Infinity;
+  // Do a dumb linear search of the step interval array...
+  for (var i = 0; i < steps.length; i++) {
+    var stepVal = steps[i];
+    var interval = Math.abs(stepVal - val);
+    if (interval < lastInterval) {
+      stepIndex = i;
+      lastInterval = interval;
+    }
+  }
+  return stepIndex;
+}
+
+
+/**
+ * Launch the script.
+ *
+ * Construct an anonymous instance and run it
  * as long as we are not unit-testing this snippet.
  */
 if (typeof(SimpleJPEGExporter_unitTest) == "undefined") {
   try {
     new SimpleJPEGExporter().run();
   } catch (e) {
-    // This should never happen but if scripts throw an unhandled
-    // exception it seems to screw things up with Photoshop's
-    // script handler...
-    // TODO: fail silently?
+    // This shouldn't happen but if scripts throw an unhandled
+    // exception it seems to bork Photoshop's javascript engine...
     Window.alert('Script failed:\n' + e);
   }
 }
