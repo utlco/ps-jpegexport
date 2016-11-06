@@ -32,7 +32,7 @@ Installation
    This will create a folder named `ps-jpegexport-master`.
 
 3. From folder `ps-jpegexport-master` copy or move the script file
-   **SimpleJPEGExport.jsx** to the Photoshop scripts folder.
+   **SimpleJPEGExporter.jsx** to the Photoshop scripts folder.
 
 4. Restart Photoshop.
 
@@ -65,7 +65,7 @@ Usage
 
 1. Open any images you want to export.
 
-2. Select File->Scripts->SimpleJPegExport
+2. Select File->Scripts->Simple JPEG Export...
 
 The script will export all the images currently open in Photoshop.
 The original images will not be modified.
