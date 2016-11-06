@@ -367,7 +367,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
         'folderBtn: Button { alignment:"left", text:"Choose Export Folder"},' +
       '}' +
       'settingsPnl: Panel {' +
-        'text: "Settings",' +
+        'text: "Image Settings",' +
         'alignment: "left",' +
         'orientation: "column",' +
         'jpgGrp: Group { ' +
@@ -394,6 +394,11 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
           'alignment:"right",' +
           'labelTxt: StaticText { text: "" },' +
           'resetBtn: Button { text: "Default Values" },' +
+//          'resetSubGrp: Group {' +
+//            'alignment: "left",' +
+//            'size: [300, 30],' +
+//            'resetBtn: Button { text: "Default Values" },' +
+//          '}' +
         '}' +
       '}' +
       'closeGrp: Group {' +
@@ -403,7 +408,8 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
       '}' +
       'overwrtGrp: Group {' +
         'alignment:"left",' +
-        'labelTxt: StaticText { text: "Overwrite existing image files" },' +
+        'labelTxt: StaticText {' +
+          'text: "Overwrite image files in export folder" },' +
         'silentOverwriteChk: Checkbox { value: false },' +
       '}' +
       'okGrp: Group {' +
@@ -422,6 +428,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   this.guiMaxSize = win.settingsPnl.sizeGrp.sizeSubGrp.maxSize;
   this.guiSizeSlider = win.settingsPnl.sizeGrp.sizeSubGrp.sizeSlider;
   this.guiResetBtn = win.settingsPnl.resetGrp.resetBtn;
+//  this.guiResetBtn = win.settingsPnl.resetGrp.resetSubGrp.resetBtn;
   this.guiCloseAfterExportChk = win.closeGrp.closeAfterExportChk;
   this.guiSilentOverwriteChk = win.overwrtGrp.silentOverwriteChk;
   this.guiCancelBtn = win.okGrp.cancelBtn;
