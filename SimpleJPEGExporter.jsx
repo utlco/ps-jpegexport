@@ -1,7 +1,7 @@
 /**
  * SimpleJPEGExporter
  *
- * A Photoshop script that exports one or more images as JPEG files
+ * A Photoshop CS script that exports one or more images as JPEG files
  * compatible with various online art application platforms.
  *
  * @author Claude Zervas
@@ -109,6 +109,9 @@ SimpleJPEGExporter.prototype.okGo = function() {
   var originalDisplayDialogs = app.displayDialogs;
   var status = EXPORT_FAILED;
 
+  app.displayDialogs = DialogModes.NO;
+  preferences.rulerUnits = Units.PIXELS;
+
   try {
     status = this.exportAll();
   } finally {
@@ -131,11 +134,14 @@ SimpleJPEGExporter.prototype.exportAll = function() {
   var jpegQuality = Math.round(12 * (this.jpegQuality / 100.0));
   var numDocs = app.documents.length;
 
-  app.displayDialogs = DialogModes.NO;
-  preferences.rulerUnits = Units.PIXELS;
+  // Make a copy of the document list since it's a live collection
+  var openDocuments = Array(numDocs);
+  for (var i = 0; i < numDocs; i++) {
+    openDocuments[i] = app.documents[i];
+  }
 
   for (var i = 0; i < numDocs; i++) {
-    var srcDoc = app.documents[i];
+    var srcDoc = openDocuments[i];
     var srcFilename = srcDoc.name;
     var extindex = srcFilename.lastIndexOf('.');
     var basename = srcFilename.substr(0, extindex) || srcFilename;
@@ -162,10 +168,13 @@ SimpleJPEGExporter.prototype.exportAll = function() {
       }
     }
 
-    // Make a temporary copy of the current active document.
-    var tmpDoc = srcDoc.duplicate('untitled', true);
+    // Make a temporary copy of the current image document.
+    // This seems to only work if the document to be duplicated is made
+    // the active document... No idea why.
+    app.activeDocument = srcDoc;
+    var tmpDoc = srcDoc.duplicate(basename, true);
     try {
-      jpegOptions = this.processJPEG(tmpDoc, this.maxImageSize, jpegQuality);
+      var jpegOptions = this.processJPEG(tmpDoc, this.maxImageSize, jpegQuality, null);
       tmpDoc.saveAs(jpegFile, jpegOptions, true, Extension.LOWERCASE);
     } catch (e) {
       Window.alert('Exporting ' + srcDoc.name + ' failed:\n' + e);
@@ -177,8 +186,8 @@ SimpleJPEGExporter.prototype.exportAll = function() {
       }
     }
 
-    // Close the source image document if required.
-    if (this.closeAfterExport) {
+    // Close the source image document when done, if required.
+    if (status === EXPORT_OK && this.closeAfterExport) {
       srcDoc.close(SaveOptions.PROMPTTOSAVECHANGES);
     }
   }
