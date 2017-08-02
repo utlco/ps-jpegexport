@@ -403,7 +403,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
         '}' +
         'matteGrp: Group {' +
         'alignment:"right",' +
-        'labelTxt: StaticText { text: "Background color:" },' +
+        'labelTxt: StaticText { text: "Matte color:" },' +
         'matteSubGrp: Group {' +
           'alignment: "left",' +
           'size: [300, 30],' +
