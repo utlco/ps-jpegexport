@@ -39,10 +39,13 @@ var FILE_SUFFIX = '-copy';
 var SIZE_STEPS = [100, 240, 480, 600, 720, 800, 1000, 1280, 1600, 1920, 2048];
 // JPEG quality detente step values for jpeg quality slider control.
 var JPEG_STEPS = [30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+// Background color selection to MatteType
+var JPEG_MATTE = [MatteType.BLACK, MatteType.WHITE, MatteType.BACKGROUND, MatteType.FOREGROUND]
 
 var KEY_EXPORT_FOLDER = app.stringIDToTypeID('exportFolder');
 var KEY_JPEG_QUALITY = app.stringIDToTypeID('jpegQuality');
 var KEY_MAX_IMAGE_SIZE = app.stringIDToTypeID('maxImageSize');
+var KEY_JPEG_MATTE = app.stringIDToTypeID('matteIndex');
 var KEY_CLOSE_AFTER_EXPORT = app.stringIDToTypeID('closeAfterExport');
 var KEY_SILENT_OVERWRITE = app.stringIDToTypeID('silentOverwrite');
 var SETTINGS_KEY = 'utlcoSimpleJPEGExporter';
@@ -62,6 +65,8 @@ function SimpleJPEGExporter() {
 
   // JPEG output quality 1-100%
   this.jpegQuality = DEFAULT_JPEG_QUALITY;
+  // JPEG matte type index
+  this.jpegMatte = 0
   // Maximum exported image height/width
   this.maxImageSize = DEFAULT_MAX_IMAGE_SIZE;
   // Close the original document after export
@@ -131,9 +136,11 @@ SimpleJPEGExporter.prototype.okGo = function() {
  */
 SimpleJPEGExporter.prototype.exportAll = function() {
   var status = EXPORT_OK;
-  var jpegQuality = Math.round(12 * (this.jpegQuality / 100.0));
   var numDocs = app.documents.length;
-
+  // Convert JPEG quality from percent to 0-12
+  var jpegQuality = Math.round(12 * (this.jpegQuality / 100.0));
+  var jpegMatte = JPEG_MATTE[this.jpegMatte]
+  
   // Make a copy of the document list since it's a live collection
   var openDocuments = Array(numDocs);
   for (var i = 0; i < numDocs; i++) {
@@ -174,7 +181,8 @@ SimpleJPEGExporter.prototype.exportAll = function() {
     app.activeDocument = srcDoc;
     var tmpDoc = srcDoc.duplicate(basename, true);
     try {
-      var jpegOptions = this.processJPEG(tmpDoc, this.maxImageSize, jpegQuality, null);
+      var jpegOptions = this.processJPEG(tmpDoc, this.maxImageSize,
+                                         jpegQuality, jpegMatte);
       tmpDoc.saveAs(jpegFile, jpegOptions, true, Extension.LOWERCASE);
     } catch (e) {
       Window.alert('Exporting ' + srcDoc.name + ' failed:\n' + e);
@@ -200,13 +208,13 @@ SimpleJPEGExporter.prototype.exportAll = function() {
  * @param {Document} doc - The Photoshop source image document.
  * @param {number} maxSize - The maximum height/width of the exported image.
  * @param {number} jpegQuality - The JPEG output quality 10-100%.
- * @param {string} bgColor - The background color used for letterboxing.
+ * @param {string} matte - The jpeg MatteType.
  *      Can be null, in which case no letterboxing is performed.
  *
  * @returns {JPEGOptions}
  */
 SimpleJPEGExporter.prototype.processJPEG = function(
-    doc, maxSize, jpegQuality, bgColor
+    doc, maxSize, jpegQuality, jpegMatte
 ) {
   var resampleMethod = ResampleMethod.BICUBICSHARPER;
   var aspectRatio = doc.width / doc.height;
@@ -215,7 +223,6 @@ SimpleJPEGExporter.prototype.processJPEG = function(
   var scaleFactor = 1.0;
 
   // Make the image JPEG friendly.
-  doc.flatten();
   doc.changeMode(ChangeMode.RGB);
   doc.convertProfile("sRGB IEC61966-2.1", Intent.PERCEPTUAL, true, false);
   doc.bitsPerChannel = BitsPerChannelType.EIGHT;
@@ -233,22 +240,12 @@ SimpleJPEGExporter.prototype.processJPEG = function(
     resampleMethod = ResampleMethod.BICUBICSMOOTHER;
   }
   doc.resizeImage(width, height, 72, resampleMethod);
-  // If a background color is specified then resize
-  // the canvas to maxSize square and letterbox
-  // the image with the specified background color.
-  if (bgColor) {
-    rgb = new RGBColor();
-    rgb.hexValue = bgColor;
-    solidcolor = new SolidColor();
-    solidcolor.rgb = rgb;
-    app.backgroundColor = solidcolor;
-    doc.resizeCanvas(maxSize, maxSize);
-  }
 
   jpegOptions = new JPEGSaveOptions();
   jpegOptions.embedColorProfile = true;
   jpegOptions.formatOptions = FormatOptions.STANDARDBASELINE;
-  jpegOptions.matte = MatteType.NONE;
+  jpegOptions.matte = jpegMatte;
+  jpegOptions.transparency = false
   jpegOptions.quality = jpegQuality;
   return jpegOptions;
 };
@@ -337,7 +334,12 @@ SimpleJPEGExporter.prototype.initEventHandlers = function() {
     outerThis.guiJpgQuality.text = outerThis.jpegQuality + '%';
     outerThis.guiMaxSize.text = String(outerThis.maxImageSize);
     outerThis.guiSizeSlider.value = outerThis.maxImageSize;
+    outerThis.guiMatteList.selection = 0;
   };
+  
+  this.guiMatteList.onChange = function() {
+    outerThis.jpegMatte = outerThis.guiMatteList.selection.index;
+  }
 
   this.guiCancelBtn.onClick = function() {
     outerThis.windowRef.close();
@@ -399,6 +401,15 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
             'sizeSlider: Slider { size: [150, 30] },' +
           '}' +
         '}' +
+        'matteGrp: Group {' +
+        'alignment:"right",' +
+        'labelTxt: StaticText { text: "Background color:" },' +
+        'matteSubGrp: Group {' +
+          'alignment: "left",' +
+          'size: [300, 30],' +
+          'matteList: DropDownList { properties: { items: ["Black", "White", "Background", "Foreground"] } },' +
+        '}' +
+      '}' +
         'resetGrp: Group {' +
           'alignment:"right",' +
           'labelTxt: StaticText { text: "" },' +
@@ -436,6 +447,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   this.guiJpgSlider = win.settingsPnl.jpgGrp.jpqQGrp.jpgSlider;
   this.guiMaxSize = win.settingsPnl.sizeGrp.sizeSubGrp.maxSize;
   this.guiSizeSlider = win.settingsPnl.sizeGrp.sizeSubGrp.sizeSlider;
+  this.guiMatteList = win.settingsPnl.matteGrp.matteSubGrp.matteList;
   this.guiResetBtn = win.settingsPnl.resetGrp.resetBtn;
 //  this.guiResetBtn = win.settingsPnl.resetGrp.resetSubGrp.resetBtn;
   this.guiCloseAfterExportChk = win.closeGrp.closeAfterExportChk;
@@ -454,6 +466,7 @@ SimpleJPEGExporter.prototype.buildDialog = function() {
   this.guiSizeSlider.minvalue = SIZE_STEPS[0];
   this.guiSizeSlider.maxvalue = SIZE_STEPS[SIZE_STEPS.length - 1];
   this.guiSizeSlider.value = this.maxImageSize;
+  this.guiMatteList.selection = this.jpegMatte;
   this.guiCloseAfterExportChk.value = this.closeAfterExport;
   this.guiSilentOverwriteChk.value = this.silentOverwrite;
 
@@ -484,12 +497,14 @@ SimpleJPEGExporter.prototype.getSettings = function() {
     this.maxImageSize = desc.getInteger(KEY_MAX_IMAGE_SIZE);
     this.closeAfterExport = desc.getBoolean(KEY_CLOSE_AFTER_EXPORT);
     this.silentOverwrite = desc.getBoolean(KEY_SILENT_OVERWRITE);
-    // Add future options at the end here to avoid skipping existing ones
+    this.jpegMatte = desc.getInteger(KEY_JPEG_MATTE)
+    // Add future options at the end to avoid skipping existing ones
     // if an exception is thrown.
   } catch (e) {
     // An exception will be thrown if settings haven't
     // been saved. Just ignore it. This only happens the first time
     // the script is used or if a new setting is added.
+    //Window.alert('Error fetching settings:\n' + e);
   }
 };
 
@@ -501,6 +516,7 @@ SimpleJPEGExporter.prototype.putSettings = function() {
   desc.putString(KEY_EXPORT_FOLDER, this.exportFolder.fullName);
   desc.putInteger(KEY_JPEG_QUALITY, this.jpegQuality);
   desc.putInteger(KEY_MAX_IMAGE_SIZE, this.maxImageSize);
+  desc.putInteger(KEY_JPEG_MATTE, this.jpegMatte);
   desc.putBoolean(KEY_CLOSE_AFTER_EXPORT, this.closeAfterExport);
   desc.putBoolean(KEY_SILENT_OVERWRITE, this.silentOverwrite);
   try {
