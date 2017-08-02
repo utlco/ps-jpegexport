@@ -78,6 +78,9 @@ most applications. The exported JPEG will most likely be under
 2mb. If it is larger than the maximum allowed by the application
 then you can try lowering the JPEG quality setting a bit.
 
+If the Photoshop image has layers with transparent areas the JPEG background
+can be specified with the *Matte color* selection.
+
 Note:
 Images smaller than the specified *Max image size* will be scaled up
 to fit.
